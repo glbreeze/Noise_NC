@@ -97,4 +97,4 @@ def analysis_feat(labels, feats, args, W,):
         'var_cls': var_cls
     }
 
-    return nc_dt
+    return nc_dt, M

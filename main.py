@@ -108,14 +108,14 @@ def main(args):
             clean_mask = labels == labels_clean
             
             # NC analysis on training set
-            nc_train, centroid = analysis_feat(labels, feats, args, W=model.classifier.weight.detach(),centroid=None)
+            nc_train, centroid = analysis_feat(labels, feats, args, W=model.classifier.weight.detach())
             train_loss_nc = F.cross_entropy(logits, labels, reduction='mean').item() 
             train_acc_nc = (logits.argmax(dim=-1) == labels).sum().item()/len(labels)
             
             # NC analysis on clean training set
             if clean_mask.sum() > 0:
                 clean_feats, clean_labels = feats[clean_mask], labels[clean_mask]
-                nc_train_clean, _ = analysis_feat(clean_labels, clean_feats, args, W=model.classifier.weight.detach(), centroid=None)
+                nc_train_clean, _ = analysis_feat(clean_labels, clean_feats, args, W=model.classifier.weight.detach())
             else:
                 nc_train_clean = nc_train
             
@@ -123,7 +123,7 @@ def main(args):
             logits_test, feats_test, labels_test, labels_clean_test = get_logits_labels_feats(test_loader, model)
             val_loss = F.cross_entropy(logits_test, labels_test, reduction='mean').item()
             val_acc = (logits_test.argmax(dim=-1) == labels_test).sum().item() / len(labels_test)
-            nc_val, _ = analysis_feat(labels_test, feats_test, args, W=model.classifier.weight.detach(), centroid=None)
+            nc_val, _ = analysis_feat(labels_test, feats_test, args, W=model.classifier.weight.detach())
             
             wandb.log({
                 'overall/lr': optimizer.param_groups[0]['lr'],
@@ -138,7 +138,7 @@ def main(args):
                 'train_nc/nc3': nc_train['nc3'],  'train_nc/nc2h': nc_train['nc2h'],
                 'train_nc/nc2w': nc_train['nc2w'],
                 
-                'norm/w_norm': nc_train['w_norm'], 'other_nc/h_norm': nc_train['h_norm'],
+                'norm/w_norm': nc_train['w_norm'], 'norm/h_norm': nc_train['h_norm'],
                 
                 'val_nc/nc1': nc_val['nc1'], 'val_nc/nc2': nc_val['nc2'],
                 'val_nc/nc3': nc_val['nc3'], 'val_nc/nc2h': nc_val['nc2h'],
@@ -192,7 +192,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='neural collapse')
     parser.add_argument("--seed", type=int, default=2021, help="random seed")
     parser.add_argument('--dset', type=str, default='cifar10')
-    parser.add_argument('--data_path', type=str, default='.')
+    parser.add_argument('--data_path', type=str, default='../datasets')
     parser.add_argument('--num_workers', type=int, default=2)
     
     parser.add_argument('--model', type=str, default='resnet18')
@@ -223,7 +223,7 @@ if __name__ == "__main__":
     parser.add_argument('--log_freq', type=int, default=2)
 
     args = parser.parse_args()
-    args.output_dir = os.path.join('/scratch/lg154/sseg/neural_collapse/result/{}/{}/'.format(args.dset, args.model), args.exp_name)
+    args.output_dir = os.path.join('./result/{}/{}/'.format(args.dset, args.model), args.exp_name)
 
     if args.dset == 'cifar100':
         args.num_classes=100
@@ -242,14 +242,9 @@ if __name__ == "__main__":
     log('save log to path {}'.format(args.output_dir))
     log(print_args(args))
 
-    os.environ["WANDB_API_KEY"] = "0c0abb4e8b5ce4ee1b1a4ef799edece5f15386ee"
     os.environ["WANDB_MODE"] = "online"  # "dryrun"
-    os.environ["WANDB_CACHE_DIR"] = "/scratch/lg154/sseg/.cache/wandb"
-    os.environ["WANDB_CONFIG_DIR"] = "/scratch/lg154/sseg/.config/wandb"
-    wandb.login(key='0c0abb4e8b5ce4ee1b1a4ef799edece5f15386ee')
-    wandb.init(project='noisy_nc',
-               name=args.exp_name
-               )
+    wandb.login()
+    wandb.init(project='noisy_nc',name=args.exp_name)
     wandb.config.update(args)
 
     main(args)

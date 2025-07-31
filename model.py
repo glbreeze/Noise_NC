@@ -14,11 +14,8 @@ class ResNet(nn.Module):
         super(ResNet, self).__init__()
 
         # Load the pretrained ResNet model
-        if args.norm == 'bn':
-            resnet_model = models.__dict__[backbone](pretrained=pretrained)
-        else:
-            resnet_model = models.__dict__[backbone](pretrained=pretrained, norm_layer=GroupNorm32)
-
+        resnet_model = models.__dict__[backbone](pretrained=pretrained)
+        
         if small_kernel:
             conv1_out_ch = resnet_model.conv1.out_channels
             if args.dset in ['fmnist', 'mnist']:

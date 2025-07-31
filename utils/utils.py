@@ -192,21 +192,24 @@ def set_optimizer(model, args, momentum, log, conv_wd=None, bn_wd=None, cls_wd=N
 
 def get_logits_labels_feats(data_loader, net):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logits_list = []
-    labels_list = []
-    feats_list = []
+    logits = []
+    labels = []
+    labels_clean = []
+    feats = []
     net.eval()
     with torch.no_grad():
-        for data, label in data_loader:
-            data, label = data.to(device), label.to(device)
-            logits, feats = net(data, ret_feat=True)
-            logits_list.append(logits)
-            labels_list.append(label)
-            feats_list.append(feats)
-        logits = torch.cat(logits_list)
-        labels = torch.cat(labels_list)
-        feats = torch.cat(feats_list, dim=0) # [N, 512]
-    return logits, labels, feats
+        for data, label, label_clean in data_loader:
+            data, label, label_clean = data.to(device), label.to(device), label_clean.to(device)
+            logit, feat = net(data, ret_feat=True)
+            logits.append(logit)
+            feats.append(feat)
+            labels.append(label)
+            labels_clean.append(label_clean)
+        labels = torch.cat(labels)
+        labels_clean = torch.cat(labels_clean)
+        logits = torch.cat(logits, dim=0)
+        feats = torch.cat(feats, dim=0) # [N, 512]
+    return logits, feats, labels, labels_clean
 
 
 def get_logits_labels(data_loader, net):
