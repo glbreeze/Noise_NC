@@ -108,7 +108,7 @@ class cifar10Noisy(datasets.CIFAR10):
             print("Print noisy label generation statistics:")
             for i in range(10):
                 n_noisy = np.sum(np.array(self.targets) == i)
-                print(f"Class {i}, number of noisy {n_noisy}")
+                print(f"Number of (noisy) samples in class {i}: {n_noisy}")
             return
 
     def __getitem__(self, index: int) -> Tuple[Any, Any, Any]:

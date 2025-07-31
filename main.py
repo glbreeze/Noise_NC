@@ -213,7 +213,7 @@ if __name__ == "__main__":
     parser.add_argument('--lr', type=float, default=0.05)
     parser.add_argument('--scheduler', type=str, default='ms')  # step|ms/multi_step/cosine
     parser.add_argument('--batch_size', type=int, default=128)
-    parser.add_argument('--max_epochs', type=int, default=600)
+    parser.add_argument('--max_epochs', type=int, default=300)
     parser.add_argument('--wd', type=float, default=5e-4)  # '54'|'01_54' | '01_54_54'
     parser.add_argument('--loss', type=str, default='ce')  # ce|ls|ceh|hinge
     parser.add_argument('--eps', type=float, default=0.05)  # for ls loss
