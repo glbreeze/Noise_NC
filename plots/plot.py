@@ -1,6 +1,6 @@
 import os, pickle
 from matplotlib import pyplot as plt
-from utils import Graph_Vars
+from utils.utils import Graph_Vars
 from main import exam_epochs
 import numpy as np
 
