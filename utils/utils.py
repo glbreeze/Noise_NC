@@ -67,7 +67,6 @@ class CrossEntropyLabelSmooth(nn.Module):
             return loss.mean()
         else:
             return loss
-        return loss
     
 
 class FocalLoss(nn.Module):
@@ -147,19 +146,80 @@ class SymmetricCrossEntropy(nn.Module):
         self.beta = beta
 
     def forward(self, y_pred, y_true):
+        y_pred = F.softmax(y_pred, dim=1)
         if y_true.ndim == 1:
             y_true = torch.zeros_like(y_pred).scatter_(1, y_true.unsqueeze(1), 1)
 
         # Standard CE: -y_true * log(y_pred)
-        y_pred_clam = torch.clamp(y_pred, min=1e-7, max=1.0)
-        ce_loss = torch.sum(-y_true * torch.log(y_pred_clam), dim=-1)
+        y_pred_clamp = torch.clamp(y_pred, min=1e-7, max=1.0)
+        ce_loss = torch.sum(-y_true * torch.log(y_pred_clamp), dim=-1)
 
         # Reverse CE: -y_pred * log(y_true)
-        y_true_clam = torch.clamp(y_true, min=1e-4, max=1.0)
-        rce_loss = torch.sum(-y_pred * torch.log(y_true_clam), dim=-1)
+        y_true_clamp = torch.clamp(y_true, min=1e-4, max=1.0)
+        rce_loss = torch.sum(-y_pred * torch.log(y_true_clamp), dim=-1)
 
         loss = self.alpha * ce_loss.mean() + self.beta * rce_loss.mean()
         return loss
+
+
+class MAELoss(nn.Module):
+    def __init__(self):
+        super(MAELoss, self).__init__()
+
+    def forward(self, logits, targets):
+        num_classes = logits.size(1)
+        one_hot = F.one_hot(targets, num_classes=num_classes).float()
+
+        probs = F.softmax(logits, dim=1)
+        loss = torch.mean(torch.sum(torch.abs(probs - one_hot), dim=1))
+        return loss
+
+
+class GCELoss(nn.Module):
+    def __init__(self, q=0.5, reduction='mean'):
+        super(GCELoss, self).__init__()
+        self.q = q
+        self.reduction = reduction
+
+    def forward(self, logits, targets):
+        probs = F.softmax(logits, dim=1)
+        true_probs = torch.gather(probs, 1, targets.unsqueeze(1)).squeeze(1)  # [B]
+
+        if self.q == 1.0:
+            loss = -torch.log(true_probs)
+        else:
+            loss = (1.0 - true_probs.pow(self.q)) / self.q
+
+        if self.reduction == 'mean':
+            return loss.mean()
+        elif self.reduction == 'sum':
+            return loss.sum()
+        else:
+            return loss  # shape: [B]
+        
+
+def feature_to_weight_loss(feat, target_w, metric="l2", feat_norm=False, hb_delta=1.0, eps=1e-8):
+    """
+    feat: [B, D]
+    target_w: [B, D]  (already indexed from classifier weights)
+    """
+    if feat_norm: 
+        feat = F.normalize(feat, dim=1, eps=eps)
+        
+    if metric == "l2":
+        loss = ((feat - target_w) ** 2).sum(dim=1).mean()
+    elif metric == 'l1':
+        loss = (feat - target_w).abs().sum(dim=1).mean()
+    elif metric == "cos": # 1 - cosine similarity
+        f = F.normalize(feat, dim=1, eps=eps)
+        w = F.normalize(target_w, dim=1, eps=eps)
+        loss = 1.0 - (f * w).sum(dim=1).mean()
+    elif metric == "huber":
+        loss = F.smooth_l1_loss(feat, target_w, beta=hb_delta, reduction="mean")
+    else:
+        raise ValueError(f"Unknown metric: {metric}")
+    return loss
+
 
 
 def set_optimizer(model, args, momentum, log, conv_wd=None, bn_wd=None, cls_wd=None):

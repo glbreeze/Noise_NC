@@ -7,7 +7,7 @@ import pickle
 import argparse
 from utils.nc_metric import analysis_feat
 from utils.utils import set_log_path, log, print_args, get_scheduler, get_logits_labels_feats, AverageMeter
-from utils.utils import CrossEntropyLabelSmooth, CrossEntropyHinge, FocalLoss, SymmetricCrossEntropy
+from utils.utils import CrossEntropyLabelSmooth, CrossEntropyHinge, FocalLoss, SymmetricCrossEntropy, MAELoss, GCELoss, feature_to_weight_loss
 
 from model import ResNet, MLP
 from dataset.data import get_dataloader
@@ -28,7 +28,7 @@ def classwise_acc(targets, preds):
     return cls_acc
 
 
-def train_one_epoch(model, criterion, train_loader, optimizer, args,):
+def train_one_epoch(model, criterion, train_loader, optimizer, args,): 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.train()
 
@@ -41,10 +41,22 @@ def train_one_epoch(model, criterion, train_loader, optimizer, args,):
 
         data, target = data.to(device), target.to(device)
         out, feat = model(data, ret_feat=True)
-
+        
         optimizer.zero_grad()
-        loss = criterion(out, target) 
-        loss.backward()
+        
+        if args.loss.startswith('f'):
+            target_w = model.classifier.weight.detach()[target]
+            loss_feat = feature_to_weight_loss(feat, target_w, metric=args.loss[1:], feat_norm=args.feat_norm)
+            
+            ce_wt = float(getattr(args, "ce_wt", 0.0))
+            loss = loss_feat + (
+                ce_wt * F.cross_entropy(out, target) if ce_wt > 0 else 0.0
+            )
+    
+        else:
+            loss = criterion(out, target) 
+            
+        loss.backward()     
         optimizer.step()
         
         pred = out.argmax(dim=-1)
@@ -79,8 +91,12 @@ def main(args):
 
     if args.loss == 'ce':
         criterion = nn.CrossEntropyLoss()
-    elif args.loss == 'cse':
+    elif args.loss == 'sce':
         criterion = SymmetricCrossEntropy(alpha=args.alpha, beta=args.beta)
+    elif args.loss == 'mae':
+        criterion = MAELoss()
+    elif args.loss == 'gce':
+        criterion = GCELoss(args.q)
     elif args.loss == 'ls':
         criterion = CrossEntropyLabelSmooth(args.num_classes, epsilon=args.eps)
     elif args.loss == 'fl':
@@ -90,7 +106,8 @@ def main(args):
     elif args.loss == 'hinge':
         criterion = nn.MultiMarginLoss(p=1, margin=args.margin, reduction="mean")
     else:
-        criterion = nn.CrossEntropyLoss()
+        criterion = None
+        print(f"loss function is {args.loss}")
 
     optimizer = torch.optim.SGD(model.parameters(), momentum=0.9, lr=args.lr, weight_decay=args.wd)
     lr_scheduler = get_scheduler(args, optimizer)
@@ -98,7 +115,7 @@ def main(args):
     # ====================  start training ====================
     for epoch in range(args.max_epochs):
         
-        # ==================== train         
+        # ==================== train
         train_loss, train_acc = train_one_epoch(model, criterion, train_loader, optimizer, args)
         lr_scheduler.step()
         
@@ -196,9 +213,14 @@ if __name__ == "__main__":
     parser.add_argument('--num_workers', type=int, default=2)
     
     parser.add_argument('--model', type=str, default='resnet18')
-    parser.add_argument('--ETF_fc', action='store_true', default=False)
+    parser.add_argument('--ETF_fc', type=str, default='n') # n : None | y: | r:random 
     parser.add_argument('--noise_rate', type=float, default=0)
     parser.add_argument('--asym', action='store_true', default=False)
+    parser.add_argument('--alpha', type=float, default=1.0, help='alpha scale')
+    parser.add_argument('--beta', type=float, default=1.0, help='beta scale')
+    parser.add_argument('--q', type=float, default=0.5, help='power for gce loss')
+    parser.add_argument('--feat_norm', action='store_true', default=False)
+    parser.add_argument('--ce_wt', type=float, default=0.0, help='weight for CE loss')
 
     # dataset parameters
     parser.add_argument('--aug', type=str, default='null')
